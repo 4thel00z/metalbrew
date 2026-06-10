@@ -37,6 +37,27 @@ const link_dirs = [_][]const u8{
     "bin", "sbin", "lib", "include", "share", "etc", "libexec", "Frameworks",
 };
 
+/// The first path component of `path` (everything before the first separator),
+/// or the whole string if there is none.
+fn topComponent(path: []const u8) []const u8 {
+    const i = std.mem.indexOfScalar(u8, path, std.fs.path.sep) orelse return path;
+    return path[0..i];
+}
+
+/// Whether a keg entry at relative `path` should be linked into the prefix.
+/// Only files inside the well-known `link_dirs` are linked; keg-root loose files
+/// (AUTHORS, COPYING, README, sbom.spdx.json, …) and metadata dirs (`.brew/`)
+/// are skipped. This keeps the prefix root clean AND keeps `link`/`unlink`
+/// symmetric — `unlink` only scans `link_dirs`, so anything `link` creates here
+/// is guaranteed to be removable later (no dangling symlinks after uninstall).
+fn isLinkable(path: []const u8) bool {
+    const top = topComponent(path);
+    for (link_dirs) |d| {
+        if (std.mem.eql(u8, top, d)) return true;
+    }
+    return false;
+}
+
 /// Symlink every file from the keg at `keg_abs` into `prefix_abs`, and create
 /// `<prefix_abs>/opt/<name>` -> `<keg_abs>`.
 ///
@@ -61,6 +82,11 @@ pub fn link(
     while (try walker.next(io)) |entry| {
         // Link regular files and symlinks; skip directories (we mkdir -p them).
         if (entry.kind != .file and entry.kind != .sym_link) continue;
+
+        // Only link files inside the well-known link dirs; skip keg-root loose
+        // files and metadata so the prefix root stays clean and unlink stays
+        // symmetric.
+        if (!isLinkable(entry.path)) continue;
 
         // Absolute target: <keg_abs>/<sub>.
         const target = try std.fs.path.join(allocator, &.{ keg_abs, entry.path });
@@ -176,6 +202,12 @@ test "link then unlink a fake keg" {
     var pc_dir = try tmp.dir.createDirPathOpen(io, "Cellar/pkg/1.0/lib/pkgconfig", .{});
     pc_dir.close(io);
     try tmp.dir.writeFile(io, .{ .sub_path = "Cellar/pkg/1.0/lib/pkgconfig/p.pc", .data = "name=pkg" });
+    // A keg-root loose file (like AUTHORS/COPYING) that must NOT be linked into
+    // the prefix root, and a metadata dir that must be skipped.
+    try tmp.dir.writeFile(io, .{ .sub_path = "Cellar/pkg/1.0/AUTHORS", .data = "the authors" });
+    var brew_dir = try tmp.dir.createDirPathOpen(io, "Cellar/pkg/1.0/.brew", .{});
+    brew_dir.close(io);
+    try tmp.dir.writeFile(io, .{ .sub_path = "Cellar/pkg/1.0/.brew/pkg.rb", .data = "class Pkg" });
 
     const keg_abs = try std.fs.path.join(a, &.{ root, "Cellar", "pkg", "1.0" });
     defer a.free(keg_abs);
@@ -209,6 +241,10 @@ test "link then unlink a fake keg" {
         defer a.free(got);
         try std.testing.expectEqualStrings("hello-bin", got);
     }
+    // Keg-root loose file is NOT linked into the prefix root (no pollution).
+    try std.testing.expectError(error.FileNotFound, tmp.dir.statFile(io, "AUTHORS", .{}));
+    // Metadata dir is not linked either.
+    try std.testing.expectError(error.FileNotFound, tmp.dir.statFile(io, ".brew/pkg.rb", .{}));
 
     // Re-link is idempotent (replaces existing symlinks).
     try link(io, a, root, keg_abs, "pkg");
@@ -227,5 +263,19 @@ test "link then unlink a fake keg" {
         const got = try tmp.dir.readFileAlloc(io, "Cellar/pkg/1.0/bin/hello", a, .unlimited);
         defer a.free(got);
         try std.testing.expectEqualStrings("hello-bin", got);
+    }
+    // Regression: no dangling symlinks anywhere under the prefix after unlink.
+    // (The old bug linked keg-root files into the prefix root, which unlink
+    // never scanned, leaving them dangling once the keg was removed.)
+    {
+        var walker = try tmp.dir.walk(a);
+        defer walker.deinit();
+        while (try walker.next(io)) |entry| {
+            if (entry.kind != .sym_link) continue;
+            _ = tmp.dir.statFile(io, entry.path, .{}) catch |e| {
+                std.debug.print("dangling symlink after unlink: {s}\n", .{entry.path});
+                return e;
+            };
+        }
     }
 }
