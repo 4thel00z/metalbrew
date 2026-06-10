@@ -1,0 +1,23 @@
+<svg width="240" height="240" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="metalbrew logo">
+  <defs>
+    <clipPath id="hex">
+      <polygon points="180,100 140,169.3 60,169.3 20,100 60,30.7 140,30.7"/>
+    </clipPath>
+  </defs>
+  <!-- beer-filled hexagon: homebrew (beer) + hexagonal architecture + Zig orange -->
+  <g clip-path="url(#hex)">
+    <rect x="0" y="0" width="200" height="200" fill="#0d1117"/>
+    <rect x="0" y="80" width="200" height="120" fill="#f7a41d"/>
+    <!-- foam -->
+    <path d="M0,82 Q26,64 52,82 T104,82 T156,82 T208,82 L208,100 L0,100 Z" fill="#fdf6e3"/>
+    <circle cx="56" cy="66" r="11" fill="#fdf6e3"/>
+    <circle cx="98" cy="58" r="14" fill="#fdf6e3"/>
+    <circle cx="140" cy="66" r="11" fill="#fdf6e3"/>
+    <!-- bubbles -->
+    <circle cx="82" cy="124" r="5" fill="#ffffff" opacity="0.55"/>
+    <circle cx="124" cy="142" r="4" fill="#ffffff" opacity="0.45"/>
+    <circle cx="100" cy="162" r="6" fill="#ffffff" opacity="0.5"/>
+  </g>
+  <polygon points="180,100 140,169.3 60,169.3 20,100 60,30.7 140,30.7"
+           fill="none" stroke="#f7a41d" stroke-width="7" stroke-linejoin="round"/>
+</svg>
