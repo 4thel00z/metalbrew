@@ -14,6 +14,7 @@ const resolve_deps = @import("app/resolve_deps.zig");
 const install_app = @import("app/install.zig");
 const list_app = @import("app/list.zig");
 const uninstall_app = @import("app/uninstall.zig");
+const upgrade_app = @import("app/upgrade.zig");
 
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
@@ -187,6 +188,72 @@ pub fn main(init: std.process.Init) !void {
             };
             try w.print("Uninstalled {s}.\n", .{name});
         },
+        .upgrade => |only| {
+            var cat = (try loadCachedCatalog(init, paths)) orelse {
+                try w.writeAll("No index. Run `metalbrew update` first.\n");
+                return;
+            };
+            defer cat.deinit();
+
+            const cellar_abs = try std.fs.path.join(a, &.{ paths.prefix, "Cellar" });
+            const cellar_dir = try std.Io.Dir.cwd().createDirPathOpen(io, cellar_abs, .{});
+            const receipts_abs = try std.fs.path.join(a, &.{ paths.prefix, "var", "metalbrew", "receipts" });
+            const receipts_dir = try std.Io.Dir.cwd().createDirPathOpen(io, receipts_abs, .{});
+            var receipts = FsReceiptStore{ .io = io, .dir = receipts_dir };
+
+            const plans = upgrade_app.plan(a, cat.port(), receipts.port(), only) catch |e| switch (e) {
+                error.NotInstalled => {
+                    try w.print("'{s}' is not installed.\n", .{only.?});
+                    return;
+                },
+                error.UnknownFormula => {
+                    try w.print("No formula named '{s}'. Try `metalbrew update`.\n", .{only.?});
+                    return;
+                },
+                else => return e,
+            };
+            if (plans.len == 0) {
+                try w.writeAll("Everything up to date.\n");
+                return;
+            }
+
+            const http = try HttpClient.init(init.gpa);
+            defer http.deinit();
+            var fetcher = GhcrFetcher{ .http = http };
+            const tag = os_tag.detectArm64Tag(io, a) catch |e| switch (e) {
+                error.UnsupportedMacOS => {
+                    try w.writeAll("Unsupported macOS version (no arm64 bottle tag).\n");
+                    return;
+                },
+                else => return e,
+            };
+            const tags = [_][]const u8{tag.text};
+
+            const uninstaller = uninstall_app.Uninstaller{
+                .io = io,
+                .allocator = a,
+                .receipts = receipts.port(),
+                .prefix_abs = paths.prefix,
+                .cellar_dir = cellar_dir,
+            };
+            const installer = install_app.Installer{
+                .io = io,
+                .allocator = a,
+                .catalog = cat.port(),
+                .fetcher = fetcher.port(),
+                .receipts = receipts.port(),
+                .cellar_dir = cellar_dir,
+                .cellar_abs = cellar_abs,
+                .prefix_abs = paths.prefix,
+                .tags = &tags,
+            };
+
+            for (plans) |p| {
+                try uninstaller.uninstall(p.name);
+                _ = try installer.install(p.name);
+                try w.print("Upgraded {s} {s} -> {s}\n", .{ p.name, p.old_version, p.new_version });
+            }
+        },
     }
 }
 
@@ -210,6 +277,7 @@ fn printHelp(w: *std.Io.Writer) !void {
         \\  metalbrew install <formula>  Install a formula and its dependencies
         \\  metalbrew list               List installed packages
         \\  metalbrew uninstall <formula> Remove an installed formula
+        \\  metalbrew upgrade [<formula>] Upgrade installed packages (all, or one)
         \\
     );
 }
