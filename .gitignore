@@ -1,0 +1,7 @@
+# Zig build artifacts
+.zig-cache/
+zig-out/
+
+# Stray Claude Code conversation transcripts that landed in the repo root
+*.jsonl
+*.jsonl.bak
