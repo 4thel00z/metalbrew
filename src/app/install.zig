@@ -18,6 +18,7 @@ const resolve_deps = @import("resolve_deps.zig");
 const pour = @import("../adapters/pour.zig");
 const relocator = @import("../adapters/relocator.zig");
 const linker = @import("../adapters/linker.zig");
+const progress = @import("../adapters/progress.zig");
 
 /// All the collaborators the install pipeline needs, bundled so call signatures
 /// stay sane. Held by value (ports are fat pointers; dirs/strings are borrowed).
@@ -31,6 +32,7 @@ pub const Installer = struct {
     cellar_abs: []const u8, // absolute <prefix>/Cellar
     prefix_abs: []const u8, // absolute <prefix>
     tags: []const []const u8, // fallback tag list, current first
+    progress: ?*progress.Bar = null, // optional per-bottle download bar (relabeled per formula)
 
     /// Install `root_name` and all its transitive runtime deps (deps first).
     /// Skips any already-installed keg (receipt present). Returns the names
@@ -59,7 +61,8 @@ pub const Installer = struct {
             const bottle = pickBottle(formula, self.tags) orelse
                 return error.NoBottleForPlatform;
 
-            const bytes = try self.fetcher.fetch(self.allocator, bottle.url, bottle.sha256);
+            if (self.progress) |b| b.setLabel(name);
+            const bytes = try self.fetcher.fetch(self.allocator, bottle.url, bottle.sha256, self.progress);
             defer self.allocator.free(bytes);
 
             // If any step of THIS keg's install fails, don't leave a half-poured
@@ -110,9 +113,10 @@ const FakeCatalog = @import("../ports/catalog.zig").FakeCatalog;
 
 /// Fetcher fake: returns embedded fixture bytes keyed by url. Ignores sha.
 const FakeFetcher = struct {
-    fn fetchImpl(ptr: *anyopaque, allocator: std.mem.Allocator, url: []const u8, sha256_hex: []const u8) anyerror![]u8 {
+    fn fetchImpl(ptr: *anyopaque, allocator: std.mem.Allocator, url: []const u8, sha256_hex: []const u8, bar: ?*progress.Bar) anyerror![]u8 {
         _ = ptr;
         _ = sha256_hex;
+        _ = bar;
         const src = if (std.mem.eql(u8, url, "pkg-url"))
             @embedFile("../testdata/mini-bottle.tar.gz")
         else if (std.mem.eql(u8, url, "dep-url"))

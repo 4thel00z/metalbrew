@@ -354,7 +354,7 @@ test "relocate rewrites the real xz bottle (network + host tools)" {
     var fetcher = GhcrFetcher{ .http = http };
     const url = "https://ghcr.io/v2/homebrew/core/xz/blobs/sha256:55c891f5d47142fe923c87df0e3343d7ef2bc7d368c67892b4ad2c80e53069d5";
     const sha = "55c891f5d47142fe923c87df0e3343d7ef2bc7d368c67892b4ad2c80e53069d5";
-    const bytes = fetcher.port().fetch(a, url, sha) catch |e| {
+    const bytes = fetcher.port().fetch(a, url, sha, null) catch |e| {
         std.debug.print("relocate test skipped (fetch): {s}\n", .{@errorName(e)});
         return error.SkipZigTest;
     };

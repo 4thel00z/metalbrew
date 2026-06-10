@@ -1,6 +1,7 @@
 const std = @import("std");
 const BottleFetcher = @import("../ports/bottle_fetcher.zig").BottleFetcher;
 const HttpClient = @import("http_client.zig").HttpClient;
+const progress = @import("progress.zig");
 
 /// BottleFetcher adapter over HttpClient targeting GHCR's Homebrew bottle
 /// registry. Sends the anonymous `Authorization: Bearer QQ==` token GHCR
@@ -15,10 +16,10 @@ pub const GhcrFetcher = struct {
 
     const vtable = BottleFetcher.VTable{ .fetch = fetchImpl };
 
-    fn fetchImpl(ptr: *anyopaque, allocator: std.mem.Allocator, url: []const u8, sha256_hex: []const u8) anyerror![]u8 {
+    fn fetchImpl(ptr: *anyopaque, allocator: std.mem.Allocator, url: []const u8, sha256_hex: []const u8, bar: ?*progress.Bar) anyerror![]u8 {
         const self: *GhcrFetcher = @ptrCast(@alignCast(ptr));
         const headers = [_]std.http.Header{.{ .name = "authorization", .value = "Bearer QQ==" }};
-        const body = try self.http.getAllocHeaders(allocator, url, &headers);
+        const body = try self.http.getAllocProgress(allocator, url, &headers, bar);
         errdefer allocator.free(body);
         var digest: [32]u8 = undefined;
         std.crypto.hash.sha2.Sha256.hash(body, &digest, .{});
@@ -43,7 +44,7 @@ test "GhcrFetcher fetches + verifies a real bottle (network)" {
     var f = GhcrFetcher{ .http = http };
     const url = "https://ghcr.io/v2/homebrew/core/xz/blobs/sha256:55c891f5d47142fe923c87df0e3343d7ef2bc7d368c67892b4ad2c80e53069d5";
     const sha = "55c891f5d47142fe923c87df0e3343d7ef2bc7d368c67892b4ad2c80e53069d5";
-    const bytes = f.port().fetch(a, url, sha) catch |e| {
+    const bytes = f.port().fetch(a, url, sha, null) catch |e| {
         std.debug.print("network test skipped: {s}\n", .{@errorName(e)});
         return error.SkipZigTest;
     };
@@ -53,5 +54,5 @@ test "GhcrFetcher fetches + verifies a real bottle (network)" {
 
     // checksum mismatch path (still network, but proves the gate): wrong sha must error.
     const bad = "0000000000000000000000000000000000000000000000000000000000000000";
-    try std.testing.expectError(error.ChecksumMismatch, f.port().fetch(a, url, bad));
+    try std.testing.expectError(error.ChecksumMismatch, f.port().fetch(a, url, bad, null));
 }

@@ -131,6 +131,11 @@ pub fn main(init: std.process.Init) !void {
             };
             const tags = [_][]const u8{tag.text};
 
+            var dl_buf: [4096]u8 = undefined;
+            var dl_fw: std.Io.File.Writer = .init(.stderr(), io, &dl_buf);
+            const dl_is_tty = std.Io.File.stderr().isTty(io) catch false;
+            var bar = progress.Bar.init(&dl_fw.interface, dl_is_tty);
+
             const installer = install_app.Installer{
                 .io = io,
                 .allocator = a,
@@ -141,6 +146,7 @@ pub fn main(init: std.process.Init) !void {
                 .cellar_abs = cellar_abs,
                 .prefix_abs = paths.prefix,
                 .tags = &tags,
+                .progress = &bar,
             };
 
             const newly = installer.install(name) catch |e| switch (e) {
@@ -242,6 +248,11 @@ pub fn main(init: std.process.Init) !void {
                 .prefix_abs = paths.prefix,
                 .cellar_dir = cellar_dir,
             };
+            var dl_buf: [4096]u8 = undefined;
+            var dl_fw: std.Io.File.Writer = .init(.stderr(), io, &dl_buf);
+            const dl_is_tty = std.Io.File.stderr().isTty(io) catch false;
+            var bar = progress.Bar.init(&dl_fw.interface, dl_is_tty);
+
             const installer = install_app.Installer{
                 .io = io,
                 .allocator = a,
@@ -252,6 +263,7 @@ pub fn main(init: std.process.Init) !void {
                 .cellar_abs = cellar_abs,
                 .prefix_abs = paths.prefix,
                 .tags = &tags,
+                .progress = &bar,
             };
 
             for (plans) |p| {
