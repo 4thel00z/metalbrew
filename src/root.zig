@@ -24,6 +24,7 @@ pub const adapters = struct {
     pub const cli = @import("adapters/cli.zig");
     pub const os_tag = @import("adapters/os_tag.zig");
     pub const pour = @import("adapters/pour.zig");
+    pub const relocator = @import("adapters/relocator.zig");
 };
 
 pub const app = struct {
@@ -52,6 +53,7 @@ test {
     _ = @import("adapters/cli.zig");
     _ = @import("adapters/os_tag.zig");
     _ = @import("adapters/pour.zig");
+    _ = @import("adapters/relocator.zig");
     _ = @import("app/update_index.zig");
     _ = @import("app/get_info.zig");
     _ = @import("app/search.zig");
