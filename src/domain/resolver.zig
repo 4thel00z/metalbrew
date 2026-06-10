@@ -43,6 +43,7 @@ fn visit(
 
     const formula = lookup(ctx, name) orelse return error.UnknownFormula;
     var buf: [256][]const u8 = undefined;
+    std.debug.assert(formula.dependencies.len <= buf.len);
     const deps = formula.runtimeDeps(&buf);
     for (deps) |dep| {
         try visit(allocator, ctx, lookup, dep, visited, order);

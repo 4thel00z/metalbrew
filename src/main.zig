@@ -78,7 +78,17 @@ pub fn main(init: std.process.Init) !void {
                 return;
             };
             defer cat.deinit();
-            const order = try resolve_deps.run(a, cat.port(), name);
+            const order = resolve_deps.run(a, cat.port(), name) catch |e| switch (e) {
+                error.UnknownFormula => {
+                    try w.print("No formula named '{s}'. Try `metalbrew update`.\n", .{name});
+                    return;
+                },
+                error.CycleDetected => {
+                    try w.print("Dependency cycle involving '{s}'.\n", .{name});
+                    return;
+                },
+                else => return e,
+            };
             const deps = if (order.len > 0) order[0 .. order.len - 1] else order;
             for (deps) |d| try w.print("{s}\n", .{d});
         },
