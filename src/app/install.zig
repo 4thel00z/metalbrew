@@ -62,6 +62,17 @@ pub const Installer = struct {
             const bytes = try self.fetcher.fetch(self.allocator, bottle.url, bottle.sha256);
             defer self.allocator.free(bytes);
 
+            // If any step of THIS keg's install fails, don't leave a half-poured
+            // tree behind: a re-run would otherwise hit the exclusive-create
+            // guard (PathAlreadyExists) on re-pour and wedge the user. deleteTree
+            // is idempotent (no error if the dir is absent), so this is safe even
+            // when pour failed before creating anything. Only the current
+            // formula's keg dir (`<Cellar>/<name>`) is cleaned up.
+            var keg_ok = false;
+            errdefer if (!keg_ok) {
+                self.cellar_dir.deleteTree(self.io, name) catch {};
+            };
+
             try pour.pour(self.io, self.allocator, self.cellar_dir, bytes);
 
             const keg_abs = try std.fs.path.join(
@@ -72,6 +83,7 @@ pub const Installer = struct {
 
             try relocator.relocate(self.io, self.allocator, keg_abs, self.prefix_abs, self.cellar_abs);
             try linker.link(self.io, self.allocator, self.prefix_abs, keg_abs, name);
+            keg_ok = true;
 
             try self.receipts.put(.{ .name = name, .version = formula.version.raw });
             try installed.append(self.allocator, try self.allocator.dupe(u8, name));
