@@ -27,10 +27,18 @@ pub const HttpClient = struct {
     /// GET `url`, returning the response body as a slice owned by `allocator`.
     /// Errors with error.HttpStatus on any non-200 response.
     pub fn getAlloc(self: *HttpClient, allocator: std.mem.Allocator, url: []const u8) ![]u8 {
+        return self.getAllocHeaders(allocator, url, &.{});
+    }
+
+    /// GET `url` with `headers` attached as extra request headers, returning the
+    /// response body as a slice owned by `allocator`. Errors with
+    /// error.HttpStatus on any non-200 response.
+    pub fn getAllocHeaders(self: *HttpClient, allocator: std.mem.Allocator, url: []const u8, headers: []const std.http.Header) ![]u8 {
         var aw: std.Io.Writer.Allocating = .init(allocator);
         errdefer aw.deinit();
         const res = try self.client.fetch(.{
             .location = .{ .url = url },
+            .extra_headers = headers,
             .response_writer = &aw.writer,
         });
         if (@intFromEnum(res.status) != 200) {
@@ -61,4 +69,21 @@ test "getAlloc fetches the brew API (network)" {
     defer a.free(body);
     try std.testing.expect(body.len > 100);
     try std.testing.expect(std.mem.indexOf(u8, body, "\"name\"") != null);
+}
+
+test "getAllocHeaders fetches a ghcr bottle blob with auth (network)" {
+    if (envIsSet("METALBREW_SKIP_NET")) return error.SkipZigTest;
+    const a = std.testing.allocator;
+    const http = try HttpClient.init(a);
+    defer http.deinit();
+    const url = "https://ghcr.io/v2/homebrew/core/xz/blobs/sha256:55c891f5d47142fe923c87df0e3343d7ef2bc7d368c67892b4ad2c80e53069d5";
+    const body = http.getAllocHeaders(a, url, &.{
+        .{ .name = "authorization", .value = "Bearer QQ==" },
+    }) catch |e| {
+        std.debug.print("network test skipped: {s}\n", .{@errorName(e)});
+        return error.SkipZigTest;
+    };
+    defer a.free(body);
+    try std.testing.expect(body.len > 1000);
+    try std.testing.expect(body[0] == 0x1f and body[1] == 0x8b);
 }
