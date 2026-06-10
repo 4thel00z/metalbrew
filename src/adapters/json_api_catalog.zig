@@ -19,7 +19,19 @@ pub fn formulaFromValue(allocator: std.mem.Allocator, value: std.json.Value) !Fo
     const obj = value.object;
     const name = try allocator.dupe(u8, obj.get("name").?.string);
     const versions = obj.get("versions").?.object;
-    const ver_raw = try allocator.dupe(u8, versions.get("stable").?.string);
+    // Homebrew names the keg `<stable>_<revision>` when revision > 0 (e.g. pcre2
+    // 10.47 revision 1 -> `pcre2/10.47_1`). The keg dir, receipts, and version
+    // ordering must use that full identity, not the bare stable version, or the
+    // poured keg won't be found at `<cellar>/<name>/<version>`.
+    const stable_ver = versions.get("stable").?.string;
+    const revision: i64 = if (obj.get("revision")) |r| switch (r) {
+        .integer => |n| n,
+        else => 0,
+    } else 0;
+    const ver_raw = if (revision > 0)
+        try std.fmt.allocPrint(allocator, "{s}_{d}", .{ stable_ver, revision })
+    else
+        try allocator.dupe(u8, stable_ver);
     const desc = if (obj.get("desc")) |d| switch (d) {
         .string => |s| try allocator.dupe(u8, s),
         else => "",
@@ -103,4 +115,25 @@ test "parseFormula extracts wget from fixture" {
     }
     try std.testing.expect(found);
     try std.testing.expect(f.bottles.len >= 1); // wget has bottles
+}
+
+test "parseFormula folds revision into the keg version" {
+    const a = std.testing.allocator;
+    var arena_state = std.heap.ArenaAllocator.init(a);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    // revision > 0 -> `<stable>_<revision>` (matches Homebrew's keg dir name).
+    const with_rev =
+        \\{"name":"pcre2","versions":{"stable":"10.47"},"revision":1}
+    ;
+    const f1 = try parseFormula(arena, with_rev);
+    try std.testing.expectEqualStrings("10.47_1", f1.version.raw);
+
+    // revision absent/0 -> bare stable version.
+    const no_rev =
+        \\{"name":"xz","versions":{"stable":"5.8.3"}}
+    ;
+    const f2 = try parseFormula(arena, no_rev);
+    try std.testing.expectEqualStrings("5.8.3", f2.version.raw);
 }
