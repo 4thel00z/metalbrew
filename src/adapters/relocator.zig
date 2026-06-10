@@ -140,9 +140,13 @@ fn relocateMachO(
         if (it.next()) |id_raw| {
             const id = std.mem.trim(u8, id_raw, " \t");
             if (hasPlaceholder(id)) {
+                // Reserve first so the post-allocation appends cannot fail and
+                // strand an owned string outside `args` (the cleanup defer only
+                // frees what's already in `args`).
+                try args.ensureUnusedCapacity(allocator, 2);
                 const new_id = try replacePlaceholders(allocator, id, prefix, cellar);
-                try args.append(allocator, "-id");
-                try args.append(allocator, new_id); // owned
+                args.appendAssumeCapacity("-id");
+                args.appendAssumeCapacity(new_id); // owned
             }
         }
     }
@@ -157,11 +161,15 @@ fn relocateMachO(
         while (it.next()) |line| {
             const dep = parseOtoolPath(line) orelse continue;
             if (!hasPlaceholder(dep)) continue;
+            try args.ensureUnusedCapacity(allocator, 3);
             const new_dep = try replacePlaceholders(allocator, dep, prefix, cellar);
-            const old_dep = try allocator.dupe(u8, dep);
-            try args.append(allocator, "-change");
-            try args.append(allocator, old_dep); // owned
-            try args.append(allocator, new_dep); // owned
+            const old_dep = allocator.dupe(u8, dep) catch |e| {
+                allocator.free(new_dep);
+                return e;
+            };
+            args.appendAssumeCapacity("-change");
+            args.appendAssumeCapacity(old_dep); // owned
+            args.appendAssumeCapacity(new_dep); // owned
         }
     }
 
@@ -175,8 +183,10 @@ fn relocateMachO(
     if (args.items.len <= 1) return;
 
     // Append a DUPED copy of the target path so the deferred cleanup frees it
-    // (the caller owns and frees the original `abs`).
-    try args.append(allocator, try allocator.dupe(u8, abs));
+    // (the caller owns and frees the original `abs`). Reserve first so the dupe
+    // can't be stranded by a failing append.
+    try args.ensureUnusedCapacity(allocator, 1);
+    args.appendAssumeCapacity(try allocator.dupe(u8, abs));
 
     const int_res = try std.process.run(allocator, io, .{ .argv = args.items });
     defer allocator.free(int_res.stdout);
@@ -229,11 +239,15 @@ fn collectRpathChanges(
             const end = std.mem.indexOf(u8, rest, " (offset") orelse rest.len;
             const p = std.mem.trim(u8, rest[0..end], " \t");
             if (!hasPlaceholder(p)) continue;
+            try args.ensureUnusedCapacity(allocator, 3);
             const new_p = try replacePlaceholders(allocator, p, prefix, cellar);
-            const old_p = try allocator.dupe(u8, p);
-            try args.append(allocator, "-rpath");
-            try args.append(allocator, old_p);
-            try args.append(allocator, new_p);
+            const old_p = allocator.dupe(u8, p) catch |e| {
+                allocator.free(new_p);
+                return e;
+            };
+            args.appendAssumeCapacity("-rpath");
+            args.appendAssumeCapacity(old_p);
+            args.appendAssumeCapacity(new_p);
         }
     }
 }
@@ -375,11 +389,10 @@ test "relocate rewrites the real xz bottle (network + host tools)" {
     const keg_abs = try std.fs.path.join(a, &.{ cellar_abs, "xz", "5.8.3" });
     defer a.free(keg_abs);
 
-    // 4. Relocate.
-    relocate(io, a, keg_abs, prefix, cellar_abs) catch |e| {
-        std.debug.print("relocate test skipped (relocate): {s}\n", .{@errorName(e)});
-        return error.SkipZigTest;
-    };
+    // 4. Relocate. A failure here is a real regression, not a skip — fetch
+    // (network) and pour have already succeeded, and the host tools are
+    // required (re-asserted below via otool/codesign), so don't mask it.
+    try relocate(io, a, keg_abs, prefix, cellar_abs);
 
     // (a) No file under the keg still contains a placeholder.
     {

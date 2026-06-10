@@ -38,6 +38,10 @@ metalbrew update            # download + cache the formula index
 metalbrew info wget         # name, version, description, dependencies
 metalbrew search wget       # search formula names
 metalbrew deps wget         # transitive runtime deps, in install order
+metalbrew install wget      # fetch + verify + relocate + link a bottle (with deps)
+metalbrew list              # list installed packages
+metalbrew uninstall wget    # unlink + remove an installed package
+metalbrew upgrade [wget]    # upgrade all installed packages, or just one
 ```
 
 The prefix defaults to `~/.metalbrew`; override with `METALBREW_PREFIX`.
@@ -49,16 +53,10 @@ Strict ports & adapters. The domain is pure and I/O-free; use-cases orchestrate 
 | Layer | Path | Responsibility |
 |-------|------|----------------|
 | Domain | `src/domain/` | Value objects + dependency resolution (pure) |
-| Ports | `src/ports/` | Interfaces the app needs (`PackageCatalog`, `IndexCache`) |
-| App | `src/app/` | Use-cases: `update` · `info` · `search` · `deps` |
+| Ports | `src/ports/` | Interfaces the app needs (`PackageCatalog`, `IndexCache`, `BottleFetcher`, `ReceiptStore`) |
+| App | `src/app/` | Use-cases: `update` · `info` · `search` · `deps` · `install` · `list` · `uninstall` · `upgrade` |
 | Adapters | `src/adapters/` | HTTP, filesystem, JSON parsing, CLI |
 | Composition | `src/main.zig` | Wires concrete adapters to use-cases |
-
-## Roadmap
-
-- [x] **M1** — read-only spine: index fetch + cache, `update` / `info` / `search` / `deps`, transitive resolution
-- [ ] **M2** — install pipeline: ghcr.io bottle fetch + sha256 verify, Mach-O relocation, ad-hoc re-sign, keg linking, receipts; `install` / `uninstall` / `list`
-- [ ] **M3** — `upgrade`: version-diff installed vs index, reinstall newer
 
 ## Development
 
