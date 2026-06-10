@@ -1,12 +1,13 @@
 const std = @import("std");
 const HttpClient = @import("../adapters/http_client.zig").HttpClient;
 const IndexCache = @import("../ports/index_cache.zig").IndexCache;
+const progress = @import("../adapters/progress.zig");
 
 pub const INDEX_URL = "https://formulae.brew.sh/api/formula.json";
 
 /// Fetch the full index and store it via the cache port. Returns bytes written.
-pub fn run(allocator: std.mem.Allocator, http: *HttpClient, cache: IndexCache, url: []const u8) !usize {
-    const body = try http.getAlloc(allocator, url);
+pub fn run(allocator: std.mem.Allocator, http: *HttpClient, cache: IndexCache, url: []const u8, bar: ?*progress.Bar) !usize {
+    const body = try http.getAllocProgress(allocator, url, &.{}, bar);
     defer allocator.free(body);
     try cache.write(body);
     return body.len;
@@ -47,7 +48,7 @@ test "UpdateIndex writes fetched bytes to cache (network)" {
     defer http.deinit();
     var mem = MemCache{ .a = a };
     defer if (mem.buf) |b| a.free(b);
-    const n = run(a, http, mem.port(), INDEX_URL) catch return error.SkipZigTest;
+    const n = run(a, http, mem.port(), INDEX_URL, null) catch return error.SkipZigTest;
     try std.testing.expect(n > 1000);
     try std.testing.expect(mem.buf != null);
 }

@@ -1,4 +1,5 @@
 const std = @import("std");
+const progress = @import("progress.zig");
 
 /// Owns an Io + std.http.Client for the process lifetime. Heap-allocated; construct once in main.
 pub const HttpClient = struct {
@@ -47,6 +48,57 @@ pub const HttpClient = struct {
         }
         return aw.toOwnedSlice();
     }
+
+    /// GET `url` with `headers`, streaming the (possibly compressed) body and
+    /// reporting progress on `bar`. Returns the decompressed body owned by
+    /// `allocator`. A percentage is shown only for identity-encoded responses;
+    /// for gzip/zstd a downloaded-MB counter is shown (since `content_length`
+    /// is the compressed size). Errors with error.HttpStatus on non-200.
+    pub fn getAllocProgress(
+        self: *HttpClient,
+        allocator: std.mem.Allocator,
+        url: []const u8,
+        headers: []const std.http.Header,
+        bar: ?*progress.Bar,
+    ) ![]u8 {
+        const uri = try std.Uri.parse(url);
+        var req = try self.client.request(.GET, uri, .{
+            .keep_alive = false,
+            .redirect_behavior = @enumFromInt(3),
+            .extra_headers = headers,
+        });
+        defer req.deinit();
+        try req.sendBodiless();
+        var redirect_buf: [8 * 1024]u8 = undefined;
+        var response = try req.receiveHead(&redirect_buf);
+        if (@intFromEnum(response.head.status) != 200) return error.HttpStatus;
+        const enc = response.head.content_encoding;
+        const total: ?u64 = if (enc == .identity) response.head.content_length else null;
+        var transfer_buf: [4096]u8 = undefined;
+        var decompress: std.http.Decompress = undefined;
+        const dbuf = switch (enc) {
+            .identity => try allocator.alloc(u8, 0),
+            .zstd => try allocator.alloc(u8, std.compress.zstd.default_window_len),
+            .deflate, .gzip => try allocator.alloc(u8, std.compress.flate.max_window_len),
+            .compress => return error.UnsupportedCompression,
+        };
+        defer allocator.free(dbuf);
+        const reader = response.readerDecompressing(&transfer_buf, &decompress, dbuf);
+        var list: std.ArrayList(u8) = .empty;
+        errdefer list.deinit(allocator);
+        var chunk: [64 * 1024]u8 = undefined;
+        var downloaded: u64 = 0;
+        if (bar) |b| b.start();
+        while (true) {
+            const n = reader.readSliceShort(&chunk) catch |e| return e; // ShortError; 0 = EOF
+            if (n == 0) break;
+            try list.appendSlice(allocator, chunk[0..n]);
+            downloaded += n;
+            if (bar) |b| b.update(downloaded, total);
+        }
+        if (bar) |b| b.finish(true);
+        return list.toOwnedSlice(allocator);
+    }
 };
 
 /// Returns true if the environment variable `name` is set in the current
@@ -86,4 +138,18 @@ test "getAllocHeaders fetches a ghcr bottle blob with auth (network)" {
     defer a.free(body);
     try std.testing.expect(body.len > 1000);
     try std.testing.expect(body[0] == 0x1f and body[1] == 0x8b);
+}
+
+test "getAllocProgress streams the brew index (network)" {
+    if (envIsSet("METALBREW_SKIP_NET")) return error.SkipZigTest;
+    const a = std.testing.allocator;
+    const http = try HttpClient.init(a);
+    defer http.deinit();
+    const body = http.getAllocProgress(a, "https://formulae.brew.sh/api/formula.json", &.{}, null) catch |e| {
+        std.debug.print("network test skipped: {s}\n", .{@errorName(e)});
+        return error.SkipZigTest;
+    };
+    defer a.free(body);
+    try std.testing.expect(body.len > 1_000_000);
+    try std.testing.expect(body[0] == '[');
 }

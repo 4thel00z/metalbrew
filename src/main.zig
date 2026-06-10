@@ -7,6 +7,7 @@ const CachedIndexCatalog = @import("adapters/cached_catalog.zig").CachedIndexCat
 const GhcrFetcher = @import("adapters/ghcr_fetcher.zig").GhcrFetcher;
 const FsReceiptStore = @import("adapters/fs_receipts.zig").FsReceiptStore;
 const os_tag = @import("adapters/os_tag.zig");
+const progress = @import("adapters/progress.zig");
 const update_index = @import("app/update_index.zig");
 const get_info = @import("app/get_info.zig");
 const search = @import("app/search.zig");
@@ -44,7 +45,12 @@ pub fn main(init: std.process.Init) !void {
             defer http.deinit();
             const cache_dir = try std.Io.Dir.cwd().createDirPathOpen(io, paths.cache_api, .{});
             var cache = FsIndexCache{ .io = io, .dir = cache_dir };
-            const n = try update_index.run(a, http, cache.port(), update_index.INDEX_URL);
+            var err_buf: [4096]u8 = undefined;
+            var err_fw: std.Io.File.Writer = .init(.stderr(), io, &err_buf);
+            const stderr_is_tty = std.Io.File.stderr().isTty(io) catch false;
+            var bar = progress.Bar.init(&err_fw.interface, stderr_is_tty);
+            bar.setLabel("index");
+            const n = try update_index.run(a, http, cache.port(), update_index.INDEX_URL, &bar);
             try w.print("Updated index: {d} bytes -> {s}/formula.json\n", .{ n, paths.cache_api });
         },
         .info => |name| {

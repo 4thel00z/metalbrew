@@ -27,6 +27,7 @@ pub const adapters = struct {
     pub const pour = @import("adapters/pour.zig");
     pub const relocator = @import("adapters/relocator.zig");
     pub const linker = @import("adapters/linker.zig");
+    pub const progress = @import("adapters/progress.zig");
 };
 
 pub const app = struct {
@@ -62,6 +63,7 @@ test {
     _ = @import("adapters/pour.zig");
     _ = @import("adapters/relocator.zig");
     _ = @import("adapters/linker.zig");
+    _ = @import("adapters/progress.zig");
     _ = @import("app/update_index.zig");
     _ = @import("app/get_info.zig");
     _ = @import("app/search.zig");
