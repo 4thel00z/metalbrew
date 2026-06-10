@@ -1,5 +1,10 @@
 //! metalbrew library root.
 const std = @import("std");
+
+pub const domain = struct {
+    pub const version = @import("domain/version.zig");
+};
+
 test {
-    std.testing.refAllDecls(@This());
+    _ = @import("domain/version.zig");
 }
