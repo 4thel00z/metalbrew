@@ -1,0 +1,46 @@
+name: Build
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos-aarch64:
+    name: build aarch64-macos
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Zig 0.16.0
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Build (aarch64-macos, ReleaseSafe)
+        run: zig build -Dtarget=aarch64-macos -Doptimize=ReleaseSafe
+
+      - name: Stage artifact
+        run: |
+          mkdir -p dist
+          cp zig-out/bin/metalbrew dist/metalbrew-aarch64-macos
+          shasum -a 256 dist/metalbrew-aarch64-macos | tee dist/metalbrew-aarch64-macos.sha256
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: metalbrew-aarch64-macos
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*

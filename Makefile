@@ -1,4 +1,4 @@
-.PHONY: help build release install uninstall run test test-offline fmt fmt-check check clean
+.PHONY: help build release dist install uninstall run test test-offline fmt fmt-check check clean
 
 ZIG    ?= zig
 PREFIX ?= $(HOME)/.local
@@ -26,6 +26,14 @@ release: ## Optimized build (ReleaseSafe)
 	@printf "$(BLUE)Building (ReleaseSafe)...$(RESET)\n"
 	@$(ZIG) build -Doptimize=ReleaseSafe
 	@printf "$(GREEN)Built ./zig-out/bin/metalbrew$(RESET)\n"
+
+dist: ## Build the aarch64-macOS release binary into dist/ (+ sha256)
+	@printf "$(BLUE)Building aarch64-macos (ReleaseSafe)...$(RESET)\n"
+	@$(ZIG) build -Dtarget=aarch64-macos -Doptimize=ReleaseSafe
+	@mkdir -p dist
+	@cp -f zig-out/bin/metalbrew dist/metalbrew-aarch64-macos
+	@shasum -a 256 dist/metalbrew-aarch64-macos | tee dist/metalbrew-aarch64-macos.sha256
+	@printf "$(GREEN)dist/metalbrew-aarch64-macos$(RESET)\n"
 
 install: release ## Build release and install metalbrew into $(PREFIX)/bin
 	@printf "$(BLUE)Installing to $(BINDIR)/metalbrew...$(RESET)\n"
