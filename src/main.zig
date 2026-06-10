@@ -4,10 +4,16 @@ const cli = @import("adapters/cli.zig");
 const HttpClient = @import("adapters/http_client.zig").HttpClient;
 const FsIndexCache = @import("adapters/fs_index_cache.zig").FsIndexCache;
 const CachedIndexCatalog = @import("adapters/cached_catalog.zig").CachedIndexCatalog;
+const GhcrFetcher = @import("adapters/ghcr_fetcher.zig").GhcrFetcher;
+const FsReceiptStore = @import("adapters/fs_receipts.zig").FsReceiptStore;
+const os_tag = @import("adapters/os_tag.zig");
 const update_index = @import("app/update_index.zig");
 const get_info = @import("app/get_info.zig");
 const search = @import("app/search.zig");
 const resolve_deps = @import("app/resolve_deps.zig");
+const install_app = @import("app/install.zig");
+const list_app = @import("app/list.zig");
+const uninstall_app = @import("app/uninstall.zig");
 
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
@@ -92,6 +98,95 @@ pub fn main(init: std.process.Init) !void {
             const deps = if (order.len > 0) order[0 .. order.len - 1] else order;
             for (deps) |d| try w.print("{s}\n", .{d});
         },
+        .install => |name| {
+            var cat = (try loadCachedCatalog(init, paths)) orelse {
+                try w.writeAll("No index. Run `metalbrew update` first.\n");
+                return;
+            };
+            defer cat.deinit();
+
+            const cellar_abs = try std.fs.path.join(a, &.{ paths.prefix, "Cellar" });
+            const cellar_dir = try std.Io.Dir.cwd().createDirPathOpen(io, cellar_abs, .{});
+            const receipts_abs = try std.fs.path.join(a, &.{ paths.prefix, "var", "metalbrew", "receipts" });
+            const receipts_dir = try std.Io.Dir.cwd().createDirPathOpen(io, receipts_abs, .{});
+            var receipts = FsReceiptStore{ .io = io, .dir = receipts_dir };
+
+            const http = try HttpClient.init(init.gpa);
+            defer http.deinit();
+            var fetcher = GhcrFetcher{ .http = http };
+
+            const tag = os_tag.detectArm64Tag(io, a) catch |e| switch (e) {
+                error.UnsupportedMacOS => {
+                    try w.writeAll("Unsupported macOS version (no arm64 bottle tag).\n");
+                    return;
+                },
+                else => return e,
+            };
+            const tags = [_][]const u8{tag.text};
+
+            const installer = install_app.Installer{
+                .io = io,
+                .allocator = a,
+                .catalog = cat.port(),
+                .fetcher = fetcher.port(),
+                .receipts = receipts.port(),
+                .cellar_dir = cellar_dir,
+                .cellar_abs = cellar_abs,
+                .prefix_abs = paths.prefix,
+                .tags = &tags,
+            };
+
+            const newly = installer.install(name) catch |e| switch (e) {
+                error.UnknownFormula => {
+                    try w.print("No formula named '{s}'. Try `metalbrew update`.\n", .{name});
+                    return;
+                },
+                error.NoBottleForPlatform => {
+                    try w.print("No bottle for this platform ({s}) for '{s}'.\n", .{ tag.text, name });
+                    return;
+                },
+                else => return e,
+            };
+            if (newly.len == 0) {
+                try w.writeAll("Already installed.\n");
+            } else {
+                for (newly) |n| try w.print("Installed: {s}\n", .{n});
+            }
+        },
+        .list => {
+            const receipts_abs = try std.fs.path.join(a, &.{ paths.prefix, "var", "metalbrew", "receipts" });
+            const receipts_dir = try std.Io.Dir.cwd().createDirPathOpen(io, receipts_abs, .{});
+            var receipts = FsReceiptStore{ .io = io, .dir = receipts_dir };
+            const all = try list_app.run(a, receipts.port());
+            if (all.len == 0) {
+                try w.writeAll("No packages installed.\n");
+            } else {
+                for (all) |r| try w.print("{s} {s}\n", .{ r.name, r.version });
+            }
+        },
+        .uninstall => |name| {
+            const cellar_abs = try std.fs.path.join(a, &.{ paths.prefix, "Cellar" });
+            const cellar_dir = try std.Io.Dir.cwd().createDirPathOpen(io, cellar_abs, .{});
+            const receipts_abs = try std.fs.path.join(a, &.{ paths.prefix, "var", "metalbrew", "receipts" });
+            const receipts_dir = try std.Io.Dir.cwd().createDirPathOpen(io, receipts_abs, .{});
+            var receipts = FsReceiptStore{ .io = io, .dir = receipts_dir };
+
+            const uninstaller = uninstall_app.Uninstaller{
+                .io = io,
+                .allocator = a,
+                .receipts = receipts.port(),
+                .prefix_abs = paths.prefix,
+                .cellar_dir = cellar_dir,
+            };
+            uninstaller.uninstall(name) catch |e| switch (e) {
+                error.NotInstalled => {
+                    try w.print("'{s}' is not installed.\n", .{name});
+                    return;
+                },
+                else => return e,
+            };
+            try w.print("Uninstalled {s}.\n", .{name});
+        },
     }
 }
 
@@ -105,13 +200,16 @@ fn loadCachedCatalog(init: std.process.Init, paths: config.Paths) !?CachedIndexC
 
 fn printHelp(w: *std.Io.Writer) !void {
     try w.writeAll(
-        \\metalbrew — read-only spine (M1)
+        \\metalbrew — a Homebrew reimplementation
         \\
         \\Usage:
-        \\  metalbrew update            Refresh the formula index
-        \\  metalbrew info <formula>    Show formula metadata
-        \\  metalbrew search <query>    Search formula names
-        \\  metalbrew deps <formula>    Show transitive runtime dependencies
+        \\  metalbrew update             Refresh the formula index
+        \\  metalbrew info <formula>     Show formula metadata
+        \\  metalbrew search <query>     Search formula names
+        \\  metalbrew deps <formula>     Show transitive runtime dependencies
+        \\  metalbrew install <formula>  Install a formula and its dependencies
+        \\  metalbrew list               List installed packages
+        \\  metalbrew uninstall <formula> Remove an installed formula
         \\
     );
 }

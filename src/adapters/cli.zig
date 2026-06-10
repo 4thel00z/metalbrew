@@ -6,6 +6,9 @@ pub const Command = union(enum) {
     info: []const u8,
     search: []const u8,
     deps: []const u8,
+    install: []const u8,
+    uninstall: []const u8,
+    list,
     unknown: []const u8,
 
     /// Parse argv[1..] (program name already excluded) into a Command.
@@ -17,6 +20,9 @@ pub const Command = union(enum) {
         if (std.mem.eql(u8, cmd, "info")) return if (args.len >= 2) .{ .info = args[1] } else .help;
         if (std.mem.eql(u8, cmd, "search")) return if (args.len >= 2) .{ .search = args[1] } else .help;
         if (std.mem.eql(u8, cmd, "deps")) return if (args.len >= 2) .{ .deps = args[1] } else .help;
+        if (std.mem.eql(u8, cmd, "install")) return if (args.len >= 2) .{ .install = args[1] } else .help;
+        if (std.mem.eql(u8, cmd, "uninstall")) return if (args.len >= 2) .{ .uninstall = args[1] } else .help;
+        if (std.mem.eql(u8, cmd, "list")) return .list;
         return .{ .unknown = cmd };
     }
 };
@@ -27,6 +33,11 @@ test "parse maps verbs to commands" {
     try std.testing.expectEqualStrings("wget", Command.parse(&.{ "info", "wget" }).info);
     try std.testing.expectEqualStrings("ssl", Command.parse(&.{ "search", "ssl" }).search);
     try std.testing.expectEqualStrings("wget", Command.parse(&.{ "deps", "wget" }).deps);
+    try std.testing.expectEqualStrings("xz", Command.parse(&.{ "install", "xz" }).install);
+    try std.testing.expectEqualStrings("xz", Command.parse(&.{ "uninstall", "xz" }).uninstall);
+    try std.testing.expect(Command.parse(&.{"list"}) == .list);
+    try std.testing.expect(Command.parse(&.{"install"}) == .help);
+    try std.testing.expect(Command.parse(&.{"uninstall"}) == .help);
     try std.testing.expectEqualStrings("frobnicate", Command.parse(&.{"frobnicate"}).unknown);
     try std.testing.expect(Command.parse(&.{"info"}) == .help);
 }
