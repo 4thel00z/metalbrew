@@ -26,6 +26,8 @@ pub const app = struct {
     pub const resolve_deps = @import("app/resolve_deps.zig");
 };
 
+pub const config = @import("config.zig");
+
 test {
     _ = @import("domain/version.zig");
     _ = @import("domain/formula.zig");
@@ -40,4 +42,5 @@ test {
     _ = @import("app/get_info.zig");
     _ = @import("app/search.zig");
     _ = @import("app/resolve_deps.zig");
+    _ = @import("config.zig");
 }
