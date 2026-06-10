@@ -19,6 +19,7 @@ pub const adapters = struct {
     pub const fs_index_cache = @import("adapters/fs_index_cache.zig");
     pub const cached_catalog = @import("adapters/cached_catalog.zig");
     pub const cli = @import("adapters/cli.zig");
+    pub const os_tag = @import("adapters/os_tag.zig");
 };
 
 pub const app = struct {
@@ -42,6 +43,7 @@ test {
     _ = @import("adapters/fs_index_cache.zig");
     _ = @import("adapters/cached_catalog.zig");
     _ = @import("adapters/cli.zig");
+    _ = @import("adapters/os_tag.zig");
     _ = @import("app/update_index.zig");
     _ = @import("app/get_info.zig");
     _ = @import("app/search.zig");
