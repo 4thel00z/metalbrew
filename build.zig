@@ -20,6 +20,9 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+    exe.root_module.addAnonymousImport("metalbrew_skill", .{
+        .root_source_file = b.path("skills/metalbrew/SKILL.md"),
+    });
     b.installArtifact(exe);
 
     const run_step = b.step("run", "Run metalbrew");

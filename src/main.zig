@@ -17,6 +17,8 @@ const list_app = @import("app/list.zig");
 const uninstall_app = @import("app/uninstall.zig");
 const upgrade_app = @import("app/upgrade.zig");
 
+const skill_md = @embedFile("metalbrew_skill");
+
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const a = init.arena.allocator();
@@ -200,6 +202,13 @@ pub fn main(init: std.process.Init) !void {
             };
             try w.print("Uninstalled {s}.\n", .{name});
         },
+        .skill_install => {
+            const dir_abs = init.environ_map.get("METALBREW_SKILL_DIR") orelse
+                try std.fs.path.join(a, &.{ home, ".claude/skills/metalbrew" });
+            const dir = try std.Io.Dir.cwd().createDirPathOpen(io, dir_abs, .{});
+            try dir.writeFile(io, .{ .sub_path = "SKILL.md", .data = skill_md });
+            try w.print("Installed metalbrew skill -> {s}/SKILL.md\n", .{dir_abs});
+        },
         .upgrade => |only| {
             var cat = (try loadCachedCatalog(init, paths)) orelse {
                 try w.writeAll("No index. Run `metalbrew update` first.\n");
@@ -296,6 +305,7 @@ fn printHelp(w: *std.Io.Writer) !void {
         \\  metalbrew list               List installed packages
         \\  metalbrew uninstall <formula> Remove an installed formula
         \\  metalbrew upgrade [<formula>] Upgrade installed packages (all, or one)
+        \\  metalbrew skill install      Install the metalbrew skill into ~/.claude/skills
         \\
     );
 }
