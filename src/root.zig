@@ -11,6 +11,8 @@ pub const domain = struct {
 pub const ports = struct {
     pub const catalog = @import("ports/catalog.zig");
     pub const index_cache = @import("ports/index_cache.zig");
+    pub const bottle_fetcher = @import("ports/bottle_fetcher.zig");
+    pub const receipt_store = @import("ports/receipt_store.zig");
 };
 
 pub const adapters = struct {
@@ -38,6 +40,8 @@ test {
     _ = @import("domain/platform.zig");
     _ = @import("ports/catalog.zig");
     _ = @import("ports/index_cache.zig");
+    _ = @import("ports/bottle_fetcher.zig");
+    _ = @import("ports/receipt_store.zig");
     _ = @import("adapters/http_client.zig");
     _ = @import("adapters/json_api_catalog.zig");
     _ = @import("adapters/fs_index_cache.zig");
