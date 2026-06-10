@@ -44,6 +44,32 @@ These exact patterns compiled and ran on the target machine. Do not "fix" them f
 - **Build system** (`zig init` 0.16 shape): `b.addModule`, `b.createModule`, `b.addExecutable(.{ .root_module = ... })`, `b.addTest(.{ .root_module = ... })`, a `test` step depending on `b.addRunArtifact(...)`.
 - Real datum from the spike: `GET https://formulae.brew.sh/api/formula/wget.json` → 200, `name == "wget"`, `dependencies == ["libidn2", ...]` (4 entries).
 
+### CORRECTIONS discovered during Task 1 (0.16 reality — supersede the snippets below where they conflict)
+
+These were verified against the installed stdlib while implementing Task 1. **Treat all code snippets in this plan as intent; the exact stdlib calls below win.**
+
+- **`std.fs.File` does NOT exist in 0.16** — `File` lives at `std.Io.File`. Get stdout via:
+  ```zig
+  var buf: [4096]u8 = undefined;
+  var fw: std.Io.File.Writer = .init(.stdout(), io, &buf);
+  const w = &fw.interface;        // *std.Io.Writer
+  try w.writeAll("...");
+  try w.flush();
+  ```
+- **`std.testing.refAllDeclsRecursive` does NOT exist in 0.16.** Only non-recursive `refAllDecls`, which will NOT discover tests in nested/imported modules → silent false-green. **TEST AGGREGATION RULE (mandatory):** `src/root.zig`'s `test {}` block must explicitly reference every source file so its tests run:
+  ```zig
+  test {
+      _ = @import("config.zig");
+      _ = @import("domain/version.zig");
+      // ... one line per module file as each task lands it ...
+  }
+  ```
+  Each task that creates a new `src/**.zig` file MUST add its `_ = @import("...");` line here, then confirm `zig build test` reports a higher test count.
+- **Process args/env/io/allocators come from the main parameter `init: std.process.Init`** — `std.process.argsAlloc` / `std.process.getEnvMap` are gone. `Init` provides: `init.io` (Io), `init.gpa` (Allocator), `init.arena` (*ArenaAllocator), `init.environ_map` (*std.process.Environ.Map), `init.minimal.args` (command-line args). Signature: `pub fn main(init: std.process.Init) !void`.
+- **Env var lookup** is `init.environ_map.get("NAME")` against `std.process.Environ.Map` (NOT `std.process.EnvMap`). Confirm the map's `get`/`put`/`init` API against the stdlib when writing config tests.
+- **`std.ArrayList(T)` is the unmanaged variant** in 0.16: construct with `.empty`, call `list.append(allocator, item)` and `list.toOwnedSlice(allocator)` (allocator passed per-call). The plan's snippets already use this shape.
+- **File reading:** `std.Io.File` has no `readToEndAlloc` by that exact name in 0.16 — verify the actual read-to-end API (likely via a `File.Reader` + `reader.readAlloc`/`allocRemaining`, or `std.Io.Dir` helpers) against the stdlib when implementing Task 8.
+
 ## File structure (hexagonal layout)
 
 ```
