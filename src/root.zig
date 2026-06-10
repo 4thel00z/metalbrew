@@ -12,10 +12,15 @@ pub const ports = struct {
     pub const index_cache = @import("ports/index_cache.zig");
 };
 
+pub const adapters = struct {
+    pub const http_client = @import("adapters/http_client.zig");
+};
+
 test {
     _ = @import("domain/version.zig");
     _ = @import("domain/formula.zig");
     _ = @import("domain/resolver.zig");
     _ = @import("ports/catalog.zig");
     _ = @import("ports/index_cache.zig");
+    _ = @import("adapters/http_client.zig");
 }
