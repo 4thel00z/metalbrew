@@ -16,6 +16,14 @@ pub const adapters = struct {
     pub const http_client = @import("adapters/http_client.zig");
     pub const json_api_catalog = @import("adapters/json_api_catalog.zig");
     pub const fs_index_cache = @import("adapters/fs_index_cache.zig");
+    pub const cached_catalog = @import("adapters/cached_catalog.zig");
+};
+
+pub const app = struct {
+    pub const update_index = @import("app/update_index.zig");
+    pub const get_info = @import("app/get_info.zig");
+    pub const search = @import("app/search.zig");
+    pub const resolve_deps = @import("app/resolve_deps.zig");
 };
 
 test {
@@ -27,4 +35,9 @@ test {
     _ = @import("adapters/http_client.zig");
     _ = @import("adapters/json_api_catalog.zig");
     _ = @import("adapters/fs_index_cache.zig");
+    _ = @import("adapters/cached_catalog.zig");
+    _ = @import("app/update_index.zig");
+    _ = @import("app/get_info.zig");
+    _ = @import("app/search.zig");
+    _ = @import("app/resolve_deps.zig");
 }
