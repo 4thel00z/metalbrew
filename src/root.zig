@@ -17,6 +17,7 @@ pub const ports = struct {
 
 pub const adapters = struct {
     pub const http_client = @import("adapters/http_client.zig");
+    pub const ghcr_fetcher = @import("adapters/ghcr_fetcher.zig");
     pub const json_api_catalog = @import("adapters/json_api_catalog.zig");
     pub const fs_index_cache = @import("adapters/fs_index_cache.zig");
     pub const cached_catalog = @import("adapters/cached_catalog.zig");
@@ -43,6 +44,7 @@ test {
     _ = @import("ports/bottle_fetcher.zig");
     _ = @import("ports/receipt_store.zig");
     _ = @import("adapters/http_client.zig");
+    _ = @import("adapters/ghcr_fetcher.zig");
     _ = @import("adapters/json_api_catalog.zig");
     _ = @import("adapters/fs_index_cache.zig");
     _ = @import("adapters/cached_catalog.zig");
