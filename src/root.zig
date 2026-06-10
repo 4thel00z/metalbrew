@@ -37,6 +37,7 @@ pub const app = struct {
     pub const install = @import("app/install.zig");
     pub const list = @import("app/list.zig");
     pub const uninstall = @import("app/uninstall.zig");
+    pub const upgrade = @import("app/upgrade.zig");
 };
 
 pub const config = @import("config.zig");
@@ -68,5 +69,6 @@ test {
     _ = @import("app/install.zig");
     _ = @import("app/list.zig");
     _ = @import("app/uninstall.zig");
+    _ = @import("app/upgrade.zig");
     _ = @import("config.zig");
 }
