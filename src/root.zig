@@ -14,6 +14,7 @@ pub const ports = struct {
 
 pub const adapters = struct {
     pub const http_client = @import("adapters/http_client.zig");
+    pub const json_api_catalog = @import("adapters/json_api_catalog.zig");
 };
 
 test {
@@ -23,4 +24,5 @@ test {
     _ = @import("ports/catalog.zig");
     _ = @import("ports/index_cache.zig");
     _ = @import("adapters/http_client.zig");
+    _ = @import("adapters/json_api_catalog.zig");
 }
