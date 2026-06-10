@@ -20,6 +20,7 @@ pub const adapters = struct {
     pub const ghcr_fetcher = @import("adapters/ghcr_fetcher.zig");
     pub const json_api_catalog = @import("adapters/json_api_catalog.zig");
     pub const fs_index_cache = @import("adapters/fs_index_cache.zig");
+    pub const fs_receipts = @import("adapters/fs_receipts.zig");
     pub const cached_catalog = @import("adapters/cached_catalog.zig");
     pub const cli = @import("adapters/cli.zig");
     pub const os_tag = @import("adapters/os_tag.zig");
@@ -50,6 +51,7 @@ test {
     _ = @import("adapters/ghcr_fetcher.zig");
     _ = @import("adapters/json_api_catalog.zig");
     _ = @import("adapters/fs_index_cache.zig");
+    _ = @import("adapters/fs_receipts.zig");
     _ = @import("adapters/cached_catalog.zig");
     _ = @import("adapters/cli.zig");
     _ = @import("adapters/os_tag.zig");
