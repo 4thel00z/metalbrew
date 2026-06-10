@@ -5,6 +5,7 @@ pub const domain = struct {
     pub const version = @import("domain/version.zig");
     pub const formula = @import("domain/formula.zig");
     pub const resolver = @import("domain/resolver.zig");
+    pub const platform = @import("domain/platform.zig");
 };
 
 pub const ports = struct {
@@ -33,6 +34,7 @@ test {
     _ = @import("domain/version.zig");
     _ = @import("domain/formula.zig");
     _ = @import("domain/resolver.zig");
+    _ = @import("domain/platform.zig");
     _ = @import("ports/catalog.zig");
     _ = @import("ports/index_cache.zig");
     _ = @import("adapters/http_client.zig");
