@@ -72,18 +72,6 @@ metalbrew upgrade [wget]    # upgrade all installed packages, or just one
 
 The prefix defaults to `~/.metalbrew`; override with `METALBREW_PREFIX`.
 
-## Architecture
-
-Strict ports & adapters. The domain is pure and I/O-free; use-cases orchestrate it through ports; adapters and `main.zig` live at the edge.
-
-| Layer | Path | Responsibility |
-|-------|------|----------------|
-| Domain | `src/domain/` | Value objects + dependency resolution (pure) |
-| Ports | `src/ports/` | Interfaces the app needs (`PackageCatalog`, `IndexCache`, `BottleFetcher`, `ReceiptStore`) |
-| App | `src/app/` | Use-cases: `update` · `info` · `search` · `deps` · `install` · `list` · `uninstall` · `upgrade` |
-| Adapters | `src/adapters/` | HTTP, filesystem, JSON parsing, CLI |
-| Composition | `src/main.zig` | Wires concrete adapters to use-cases |
-
 ## Development
 
 ```bash
