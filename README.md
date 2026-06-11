@@ -49,6 +49,16 @@ python3 bench/plot.py        # regenerate docs/benchmark.svg from bench/results.
 
 ## Installation
 
+### Homebrew
+
+```bash
+brew install 4thel00z/metalbrew/metalbrew
+```
+
+Builds from source via the [tap](https://github.com/4thel00z/homebrew-metalbrew) (Zig is a build-time dependency).
+
+### From source
+
 ```bash
 git clone git@github.com:4thel00z/metalbrew.git
 cd metalbrew
