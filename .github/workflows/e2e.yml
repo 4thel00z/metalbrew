@@ -1,0 +1,87 @@
+name: E2E install
+
+# End-to-end: build the real binary, then install the most-used formulae from
+# GHCR on an Apple-silicon runner and confirm each links a working executable.
+# This is the layer that catches regressions the unit tests can't — revisioned
+# kegs (pcre2 10.47_1), the arch-independent `all` bottle tag (ca-certificates),
+# relocation, and linking — i.e. real pour -> relocate -> link -> receipt runs.
+#
+# Kept separate from ci.yml so a GHCR/network hiccup never reds the fast unit CI.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: build binary
+    runs-on: macos-latest # GitHub's macOS runners are Apple silicon (arm64)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Zig 0.16.0
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Build (ReleaseSafe)
+        run: zig build -Doptimize=ReleaseSafe
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: metalbrew-bin
+          path: zig-out/bin/metalbrew
+          if-no-files-found: error
+
+  install:
+    name: install ${{ matrix.formula }}
+    needs: build
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false # one flaky/missing bottle shouldn't hide the others
+      matrix:
+        include:
+          # formula      : verify command, run from inside $METALBREW_PREFIX
+          - { formula: git, verify: bin/git --version }
+          - { formula: jq, verify: bin/jq --version }
+          - { formula: wget, verify: bin/wget --version }
+          - { formula: ripgrep, verify: bin/rg --version }
+          - { formula: xz, verify: bin/xz --version }
+          - { formula: tree, verify: bin/tree --version }
+          - { formula: fd, verify: bin/fd --version }
+          - { formula: fzf, verify: bin/fzf --version }
+          - { formula: bat, verify: bin/bat --version }
+          - { formula: coreutils, verify: bin/gtimeout --version }
+          - { formula: openssl@3, verify: bin/openssl version }
+          - { formula: curl, verify: bin/curl --version }
+    env:
+      # Isolated prefix per job; the metalbrew binary itself lives in $TOOL, not here.
+      METALBREW_PREFIX: ${{ github.workspace }}/mb-prefix
+      TOOL: ${{ github.workspace }}/tool
+    steps:
+      - name: Fetch binary
+        uses: actions/download-artifact@v4
+        with:
+          name: metalbrew-bin
+          path: ${{ github.workspace }}/tool
+
+      - name: Put metalbrew on PATH
+        run: |
+          chmod +x "$TOOL/metalbrew"
+          echo "$TOOL" >> "$GITHUB_PATH"
+
+      - name: Refresh index
+        run: metalbrew update
+
+      - name: Install ${{ matrix.formula }}
+        run: metalbrew install "${{ matrix.formula }}"
+
+      - name: Verify linked into the prefix
+        run: metalbrew list | grep -F "${{ matrix.formula }} "
+
+      - name: Verify the executable runs
+        run: cd "$METALBREW_PREFIX" && ${{ matrix.verify }}
