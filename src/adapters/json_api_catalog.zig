@@ -5,6 +5,7 @@ const BottleSpec = @import("../domain/formula.zig").BottleSpec;
 const Version = @import("../domain/version.zig").Version;
 const PackageCatalog = @import("../ports/catalog.zig").PackageCatalog;
 const HttpClient = @import("http_client.zig").HttpClient;
+const config = @import("../config.zig");
 
 /// Parse one formula object (/api/formula/<name>.json shape) into a domain Formula.
 /// All slices allocated with `allocator`.
@@ -75,7 +76,7 @@ pub fn formulaFromValue(allocator: std.mem.Allocator, value: std.json.Value) !Fo
 /// Production PackageCatalog: fetches single formulae on demand from the API.
 pub const JsonApiCatalog = struct {
     http: *HttpClient,
-    base_url: []const u8 = "https://formulae.brew.sh/api/formula",
+    base_url: []const u8 = config.DEFAULT_API_BASE ++ "/formula",
 
     pub fn port(self: *JsonApiCatalog) PackageCatalog {
         return .{ .ptr = self, .vtable = &vtable };

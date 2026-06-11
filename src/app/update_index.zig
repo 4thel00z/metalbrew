@@ -2,8 +2,9 @@ const std = @import("std");
 const HttpClient = @import("../adapters/http_client.zig").HttpClient;
 const IndexCache = @import("../ports/index_cache.zig").IndexCache;
 const progress = @import("../adapters/progress.zig");
+const config = @import("../config.zig");
 
-pub const INDEX_URL = "https://formulae.brew.sh/api/formula.json";
+pub const INDEX_URL = config.DEFAULT_API_BASE ++ "/formula.json";
 
 /// Fetch the full index and store it via the cache port. Returns bytes written.
 pub fn run(allocator: std.mem.Allocator, http: *HttpClient, cache: IndexCache, url: []const u8, bar: ?*progress.Bar) !usize {

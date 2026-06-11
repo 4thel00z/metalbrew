@@ -26,6 +26,7 @@ pub fn main(init: std.process.Init) !void {
     const home = init.environ_map.get("HOME") orelse return error.NoHome;
     const prefix_override = init.environ_map.get("METALBREW_PREFIX");
     const paths = try config.Paths.resolve(a, home, prefix_override);
+    const api_env = init.environ_map.get("METALBREW_API_URL");
 
     // Build argv (skip program name).
     var arg_list: std.ArrayList([]const u8) = .empty;
@@ -33,7 +34,11 @@ pub fn main(init: std.process.Init) !void {
     _ = ait.next();
     while (ait.next()) |arg| try arg_list.append(a, arg);
     const argv = try arg_list.toOwnedSlice(a);
-    const cmd = cli.Command.parse(argv);
+
+    // Strip global options (e.g. --api-url) before the verb; flag > env > default.
+    const parsed = cli.parseGlobals(argv);
+    const source = config.Source.resolve(parsed.globals.api_url, api_env);
+    const cmd = cli.Command.parse(parsed.rest);
 
     var out_buf: [4096]u8 = undefined;
     var out_fw: std.Io.File.Writer = .init(.stdout(), io, &out_buf);
@@ -52,7 +57,8 @@ pub fn main(init: std.process.Init) !void {
             const stderr_is_tty = std.Io.File.stderr().isTty(io) catch false;
             var bar = progress.Bar.init(&err_fw.interface, stderr_is_tty);
             bar.setLabel("index");
-            const n = try update_index.run(a, http, cache.port(), update_index.INDEX_URL, &bar);
+            const index_url = try source.indexUrl(a);
+            const n = try update_index.run(a, http, cache.port(), index_url, &bar);
             try w.print("Updated index: {d} bytes -> {s}/formula.json\n", .{ n, paths.cache_api });
         },
         .info => |name| {
@@ -304,6 +310,13 @@ fn printHelp(w: *std.Io.Writer) !void {
         \\  metalbrew uninstall <formula> Remove an installed formula
         \\  metalbrew upgrade [<formula>] Upgrade installed packages (all, or one)
         \\  metalbrew skill install      Install the metalbrew skill into ~/.claude/skills
+        \\
+        \\Global options:
+        \\  --api-url <url>              Formula API base (default https://formulae.brew.sh/api)
+        \\
+        \\Environment:
+        \\  METALBREW_PREFIX             Install prefix (default ~/.metalbrew)
+        \\  METALBREW_API_URL            Formula API base; --api-url overrides it
         \\
     );
 }

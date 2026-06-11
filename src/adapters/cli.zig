@@ -1,5 +1,41 @@
 const std = @import("std");
 
+/// Global options that may precede the subcommand verb.
+pub const Globals = struct {
+    /// Override for the formula API base URL (`--api-url`). null = unset.
+    api_url: ?[]const u8 = null,
+};
+
+/// Result of stripping global options off the front of argv.
+pub const ParsedArgs = struct {
+    globals: Globals,
+    /// Remaining args (verb + its operands), to feed to `Command.parse`.
+    rest: []const []const u8,
+};
+
+/// Consume recognised global options from the front of `args`, returning the
+/// parsed globals and the remaining args. Scanning stops at the first token
+/// that isn't a recognised global (i.e. the verb), so options like
+/// `install --foo` after the verb are left untouched. Supports both
+/// `--api-url=<url>` and `--api-url <url>` forms. No allocation: results alias
+/// `args`.
+pub fn parseGlobals(args: []const []const u8) ParsedArgs {
+    var globals = Globals{};
+    var i: usize = 0;
+    while (i < args.len) {
+        const arg = args[i];
+        if (std.mem.startsWith(u8, arg, "--api-url=")) {
+            globals.api_url = arg["--api-url=".len..];
+            i += 1;
+        } else if (std.mem.eql(u8, arg, "--api-url")) {
+            if (i + 1 >= args.len) break; // missing value: treat as end
+            globals.api_url = args[i + 1];
+            i += 2;
+        } else break; // first non-global token: the verb
+    }
+    return .{ .globals = globals, .rest = args[i..] };
+}
+
 pub const Command = union(enum) {
     help,
     update,
@@ -30,6 +66,42 @@ pub const Command = union(enum) {
         return .{ .unknown = cmd };
     }
 };
+
+test "parseGlobals: no globals leaves args intact" {
+    const args = [_][]const u8{ "install", "wget" };
+    const p = parseGlobals(&args);
+    try std.testing.expect(p.globals.api_url == null);
+    try std.testing.expectEqual(@as(usize, 2), p.rest.len);
+    try std.testing.expectEqualStrings("install", p.rest[0]);
+    try std.testing.expectEqualStrings("wget", p.rest[1]);
+}
+
+test "parseGlobals: --api-url=URL form, rest is verb + operands" {
+    const args = [_][]const u8{ "--api-url=https://m.example/api", "install", "wget" };
+    const p = parseGlobals(&args);
+    try std.testing.expectEqualStrings("https://m.example/api", p.globals.api_url.?);
+    try std.testing.expectEqual(@as(usize, 2), p.rest.len);
+    try std.testing.expectEqualStrings("install", p.rest[0]);
+    try std.testing.expectEqualStrings("wget", p.rest[1]);
+}
+
+test "parseGlobals: --api-url URL space form" {
+    const args = [_][]const u8{ "--api-url", "https://m.example/api", "search", "ssl" };
+    const p = parseGlobals(&args);
+    try std.testing.expectEqualStrings("https://m.example/api", p.globals.api_url.?);
+    try std.testing.expectEqual(@as(usize, 2), p.rest.len);
+    try std.testing.expectEqualStrings("search", p.rest[0]);
+    try std.testing.expectEqualStrings("ssl", p.rest[1]);
+}
+
+test "parseGlobals: stops at the verb, leaving later flags untouched" {
+    const args = [_][]const u8{ "install", "--api-url=https://m.example/api" };
+    const p = parseGlobals(&args);
+    try std.testing.expect(p.globals.api_url == null);
+    try std.testing.expectEqual(@as(usize, 2), p.rest.len);
+    try std.testing.expectEqualStrings("install", p.rest[0]);
+    try std.testing.expectEqualStrings("--api-url=https://m.example/api", p.rest[1]);
+}
 
 test "parse maps verbs to commands" {
     try std.testing.expect(Command.parse(&.{}) == .help);
