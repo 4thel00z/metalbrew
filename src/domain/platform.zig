@@ -22,11 +22,15 @@ pub fn arm64TagForMacOS(major: u32) ?Tag {
 }
 
 /// Ordered fallback list (current first) so install can pick the best available bottle.
+/// `all` is appended last: Homebrew tags arch-independent formulae (certs, pure scripts,
+/// data-only packages — ~a third of the index) with a single `all` bottle and no
+/// `arm64_*` variant, so it must be accepted as a last resort or those formulae (and any
+/// package depending on them, e.g. openssl@3 -> ca-certificates) fail with NoBottleForPlatform.
 pub fn arm64FallbackTags(major: u32) []const []const u8 {
     return switch (major) {
-        26 => &.{ "arm64_tahoe", "arm64_sequoia", "arm64_sonoma" },
-        15 => &.{ "arm64_sequoia", "arm64_sonoma", "arm64_ventura" },
-        14 => &.{ "arm64_sonoma", "arm64_ventura", "arm64_monterey" },
+        26 => &.{ "arm64_tahoe", "arm64_sequoia", "arm64_sonoma", "all" },
+        15 => &.{ "arm64_sequoia", "arm64_sonoma", "arm64_ventura", "all" },
+        14 => &.{ "arm64_sonoma", "arm64_ventura", "arm64_monterey", "all" },
         else => &.{},
     };
 }
@@ -40,4 +44,13 @@ test "fallback list current-first" {
     const fb = arm64FallbackTags(26);
     try std.testing.expectEqualStrings("arm64_tahoe", fb[0]);
     try std.testing.expect(fb.len >= 1);
+}
+
+test "fallback list ends with the arch-independent `all` tag" {
+    // `all` must be the last resort so arch-independent bottles (ca-certificates etc.)
+    // and their dependents resolve instead of failing with NoBottleForPlatform.
+    inline for (.{ 26, 15, 14 }) |major| {
+        const fb = arm64FallbackTags(major);
+        try std.testing.expectEqualStrings("all", fb[fb.len - 1]);
+    }
 }

@@ -18,6 +18,18 @@ pub fn detectArm64Tag(io: std.Io, allocator: std.mem.Allocator) !platform.Tag {
     return platform.arm64TagForMacOS(major) orelse error.UnsupportedMacOS;
 }
 
+/// Detect host macOS major → ordered arm64 bottle-tag fallback list (current OS first,
+/// then older releases). Lets install fall back to an older-OS bottle when the current
+/// release hasn't been bottled yet (mirrors Homebrew). The returned slice is backed by
+/// static string literals — no allocation, valid for the program lifetime. Errors
+/// UnsupportedMacOS when the version maps to no known tags.
+pub fn detectArm64FallbackTags(io: std.Io, allocator: std.mem.Allocator) ![]const []const u8 {
+    const major = try macosMajor(io, allocator);
+    const tags = platform.arm64FallbackTags(major);
+    if (tags.len == 0) return error.UnsupportedMacOS;
+    return tags;
+}
+
 /// Run `sw_vers -productVersion` and parse the leading major version (e.g. "26.4" -> 26).
 fn macosMajor(io: std.Io, allocator: std.mem.Allocator) !u32 {
     const res = try std.process.run(allocator, io, .{
@@ -60,4 +72,16 @@ test "detectArm64Tag on host returns an arm64_ tag" {
         return error.SkipZigTest;
     };
     try std.testing.expect(std.mem.startsWith(u8, tag.text, "arm64_"));
+}
+
+test "detectArm64FallbackTags on host returns current tag first" {
+    var threaded: std.Io.Threaded = .init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    const tags = detectArm64FallbackTags(io, std.testing.allocator) catch |e| {
+        std.debug.print("detect skipped: {s}\n", .{@errorName(e)});
+        return error.SkipZigTest;
+    };
+    try std.testing.expect(tags.len >= 1);
+    try std.testing.expect(std.mem.startsWith(u8, tags[0], "arm64_"));
 }

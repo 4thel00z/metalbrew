@@ -124,14 +124,13 @@ pub fn main(init: std.process.Init) !void {
             defer http.deinit();
             var fetcher = GhcrFetcher{ .http = http };
 
-            const tag = os_tag.detectArm64Tag(io, a) catch |e| switch (e) {
+            const tags = os_tag.detectArm64FallbackTags(io, a) catch |e| switch (e) {
                 error.UnsupportedMacOS => {
                     try w.writeAll("Unsupported macOS version (no arm64 bottle tag).\n");
                     return;
                 },
                 else => return e,
             };
-            const tags = [_][]const u8{tag.text};
 
             var dl_buf: [4096]u8 = undefined;
             var dl_fw: std.Io.File.Writer = .init(.stderr(), io, &dl_buf);
@@ -147,7 +146,7 @@ pub fn main(init: std.process.Init) !void {
                 .cellar_dir = cellar_dir,
                 .cellar_abs = cellar_abs,
                 .prefix_abs = paths.prefix,
-                .tags = &tags,
+                .tags = tags,
                 .progress = &bar,
             };
 
@@ -157,7 +156,7 @@ pub fn main(init: std.process.Init) !void {
                     return;
                 },
                 error.NoBottleForPlatform => {
-                    try w.print("No bottle for this platform ({s}) for '{s}'.\n", .{ tag.text, name });
+                    try w.print("No bottle for this platform ({s}) for '{s}'.\n", .{ tags[0], name });
                     return;
                 },
                 else => return e,
@@ -241,14 +240,13 @@ pub fn main(init: std.process.Init) !void {
             const http = try HttpClient.init(init.gpa);
             defer http.deinit();
             var fetcher = GhcrFetcher{ .http = http };
-            const tag = os_tag.detectArm64Tag(io, a) catch |e| switch (e) {
+            const tags = os_tag.detectArm64FallbackTags(io, a) catch |e| switch (e) {
                 error.UnsupportedMacOS => {
                     try w.writeAll("Unsupported macOS version (no arm64 bottle tag).\n");
                     return;
                 },
                 else => return e,
             };
-            const tags = [_][]const u8{tag.text};
 
             const uninstaller = uninstall_app.Uninstaller{
                 .io = io,
@@ -271,7 +269,7 @@ pub fn main(init: std.process.Init) !void {
                 .cellar_dir = cellar_dir,
                 .cellar_abs = cellar_abs,
                 .prefix_abs = paths.prefix,
-                .tags = &tags,
+                .tags = tags,
                 .progress = &bar,
             };
 
